@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Naïve GIS</title>
+<style>
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+body,
+textarea,
+input,
+select {
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue","Source Han Sans CN",sans-serif;
+    font-size: 15px;
+    line-height: 1.25em;
+}
+a {
+    color: #425e5e;
+    padding: .25em;
+}
+a:visited {
+    color: #233;
+}
+a:hover, a:focus {
+    color: #4e7a7a;
+}
+section {
+    background-color: white;
+    word-wrap: break-word;
+    box-sizing: border-box;
+    transition: all .1s;
+}
+#container {
+    height: 100%;
+    width: auto;
+}
+#agent {
+    width: 250px;
+    height: 100%;
+    float: left;
+    padding: 15px 20px;
+    overflow-y: auto;
+}
+#mapwrap, #map {
+    height: 100%;
+}
+#info {
+    margin-top: .5em;
+    margin-bottom: .25em;
+}
+@media(max-width:48em) {
+    #container > section {
+        width: 100%;
+        float: none;
+    }
+    #agent {
+        height: 20%;
+        position: relative;
+    }
+    #mapwrap {
+        height: 80%;
+    }
+}
+.ssrc, .sdst {
+    font-weight: bold;
+}
+.ssrc {
+    color: #2ECC40;
+}
+.sdst {
+    color: #FF4136;
+}
+#turnbyturn {
+    border-spacing: 0;
+    border-collapse: separate;
+    width: 100%;
+    font-size: .9em;
+}
+.turn {
+    cursor: pointer;
+}
+.turn:hover {
+    background: #FFFFE6;
+}
+.diricon {
+    font-weight: bold;
+    text-align: center;
+    width: 2em;
+}
+.instruction, .distance {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #DDD;
+}
+.distance {
+    color: #BBB;
+    text-align: right;
+}
+.btn {
+    border-radius: 2px;
+    border: 0;
+    background-color: #7092FF;
+    color: white;
+    padding: 5px 10px;
+    outline: 0;
+    font-size: 100%;
+    cursor: pointer;
+}
+.btn:hover {
+    background-color: #0a44ff;
+}
+textarea,input,select,button{
+    padding: .2em .3em;
+    outline: 0;
+}
+input {
+    padding: .3em;
+}
+textarea {
+    width: 100%;
+    font-family: monospace;
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+    outline: 0;
+    margin: .5em 0;
+}
+textarea:focus {
+    border-color: #bbb;
+}
+input, select {
+    border-width: 0px 0px 2px;
+    border-style: solid;
+    border-color: #CCC;
+}
+select {
+    background-color: transparent;
+}
+input:focus, select:focus {
+    border-color: #19E;
+}
+#sqlinput {
+    height: 8em;
+}
+#qcolor {
+    width: 5em;
+}
+#error {
+    color: #FF851B;
+    font-weight: bold;
+}
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+'use strict';
+var map;
+var map_elements = [];
+var marker_icons = {};
+var markcount = 0;
+function LoadJSON(url, q, callback) {
+    var qs = Object.keys(q).map(function(key) {
+            return [key, q[key]].map(encodeURIComponent).join("=");
+        }).join("&");
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.onreadystatechange = function() {
+        if (xmlhttp.readyState == XMLHttpRequest.DONE) {
+            callback(JSON.parse(xmlhttp.responseText), xmlhttp.status);
+        }
+    }
+    xmlhttp.open("GET", url + "?" + qs, true);
+    xmlhttp.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+    xmlhttp.send();
+}
+function SubmitForm(oFormElement, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState == XMLHttpRequest.DONE) {
+            callback(JSON.parse(xhr.responseText), xhr.status);
+        }
+    }
+    xhr.open(oFormElement.method, oFormElement.action, true);
+    xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+    var formdata = new FormData(oFormElement);
+    xhr.send(formdata);
+    window.location.hash = '#' + encodeURIComponent(formdata.get('q'));
+    return false;
+}
+function SVGMarkerIcon(fill) {
+    var url = 'data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 52" height="52px" width="32px"><path d="M15.998047 1C7.7145969 1 1 7.6567495 1 15.865234 1 24.076446 16 51 16 51 16 51 31 24.076446 31 15.865234 31 7.6567495 24.281497 1 15.998047 1zM16 10.5A5.5 5.5 0 0 1 21.5 16 5.5 5.5 0 0 1 16 21.5 5.5 5.5 0 0 1 10.5 16 5.5 5.5 0 0 1 16 10.5z" fill="'+fill+'"/></svg>';
+    return L.icon({
+        iconUrl: url,
+        iconRetinaUrl: url,
+        iconSize: [32, 52],
+        iconAnchor: [16, 51],
+    });
+}
+function GetMarkerIcon(fill) {
+    var key = fill;
+    if (marker_icons.hasOwnProperty(key)) {
+        return marker_icons[key];
+    }
+    var icon = SVGMarkerIcon(fill);
+    marker_icons[key] = icon;
+    return icon;
+}
+function FetchElements(form) {
+    SubmitForm(form, function(response, status) {
+        if (status === 200) {
+            RenderElements(response['elements']);
+        } else if (status === 404 || status === 403) {
+            document.getElementById('info').innerHTML = '<p id="error">Server Error</p>';
+        } else {
+            document.getElementById('info').innerHTML = '<p id="error">' + response['error'] +'</p>';
+        }
+    });
+    return false;
+}
+function ResetElements() {
+    while (map_elements.length) {
+        map.removeLayer(map_elements.pop());
+    }
+    var overlay = document.querySelector("div.leaflet-overlay-pane");
+    var canvases = document.querySelectorAll("canvas.leaflet-heatmap-layer");
+    var i = canvases.length;
+    while (i --> 0) {
+        overlay.removeChild(canvases[i]);
+    }
+}
+function RenderElements(elements) {
+    var i = elements.length;
+    var e, element;
+    var latlngs = [];
+    if (document.getElementById('autoreset').checked) {
+        ResetElements();
+    }
+    while (i --> 0) {
+        e = elements[i];
+        // console.log(e);
+        if (e.type === 'marker') {
+            element = L.marker(e.pos, {
+                    icon: GetMarkerIcon(e.color || "#FF4136"),
+                    draggable: false,
+                    title: e.title,
+                    alt: e.alt,
+                    riseOnHover: true
+                }).addTo(map);
+            if (e.hasOwnProperty('text')) {
+                element.bindPopup(e.text);
+            }
+            latlngs.push(e.pos);
+            map_elements.push(element);
+        } else if (e.type === 'point') {
+            element = L.circleMarker(e.pos, {
+                    color: e.color || "#3388ff",
+                    radius: e.radius || 2,
+                    stroke: false,
+                    fillOpacity: e.opacity || 1.0
+                }).addTo(map);
+            latlngs.push(e.pos);
+            map_elements.push(element);
+        } else if (e.type === 'polyline' || e.type === 'polygon') {
+            element = L[e.type](e.points, {
+                    color: e.color || '#03F',
+                    weight: e.weight === undefined ? 6 : e.weight,
+                    opacity: e.opacity === undefined ? 1.0 : e.opacity
+                }).addTo(map);
+            latlngs = latlngs.concat(e.points);
+            map_elements.push(element);
+        } else if (e.type === 'heatmap') {
+            element = L.heatLayer(e.points, {
+                radius: e.radius || 10,
+                blur: e.blur || 15,
+                minOpacity: e.minOpacity || 0.05
+            }).addTo(map);
+        }
+    }
+    i = latlngs.length;
+    if (i) {
+        var sumlat = 0, sumlng = 0
+        while (i --> 0) {
+            sumlat += latlngs[i][0];
+            sumlng += latlngs[i][1];
+        }
+        var latlng = L.latLng(sumlat/latlngs.length, sumlng/latlngs.length);
+        map.panTo(latlng);
+        if (map.getZoom() < 9) {
+            map.setZoomAround(latlng, 10);
+        }
+    }
+}
+function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+}
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('map').innerHTML = "";
+    map = L.map('map', {
+        center: [39.9276, 116.3789],
+        zoom: 3,
+        zoomControl: false,
+        preferCanvas: true
+    });
+    // var tileserver = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    var tileserver = 'https://app.gumble.pw/osm/{z}/{x}/{y}.png';
+    L.tileLayer(tileserver, {
+        attribution: '&copy; <a href="http://openstreetmap.org">OpenStreetMap</a> Contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+        maxZoom: 17,
+        minZoom: 3
+    }).addTo(map);
+    document.getElementById('reset').onclick = function() {
+        ResetElements()
+    }
+    if (window.location.hash) {
+        document.getElementById('sqlinput').innerHTML = escapeHtml(decodeURIComponent(window.location.hash.substring(1)));
+    }
+    /* if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            map.panTo([position.coords.latitude, position.coords.longitude]);
+            map.setZoom(15);
+        });
+    } */
+});
+</script>
+</head>
+<body>
+<div id="container">
+<section id="agent" class="smooth">
+    <div id="info">Enter SQL Query</div>
+    <form id="querybox" action="./query/" method="post" onsubmit="return FetchElements(this);">
+        <textarea name="q" id="sqlinput"></textarea>
+        <p>
+        <input name="color" id="qcolor" placeholder="Color">
+        <select name="type">
+          <option value="marker" selected>Marker</option> 
+          <option value="point">Point</option> 
+          <option value="polyline">Polyline</option>
+          <option value="polygon">Polygon</option>
+          <option value="heatmap">Heatmap</option>
+        </select>
+        </p><p>Coords:
+        <select name="fix">
+          <option value="wgs" selected>WGS-84</option> 
+          <option value="gcj">GCJ-02</option>
+          <option value="bd">BD-09</option>
+          <option value="3857">EPSG:3857</option>
+        </select></p><p>
+        <input type="checkbox" id="autoreset" class="btn"><label for="autoreset">Reset</label>
+        </p>
+        <input type="submit" id="submit" class="btn" value="Query">
+        <input type="button" id="reset" class="btn" value="Reset Map">
+    </form>
+</section>
+<section id="mapwrap" class="smooth">
+    <div id="map">The map is not loaded. Please check your Internet connection and your browser version.</div>
+</section>
+</div>
+</body>
+</html>
