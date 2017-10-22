@@ -1,4 +1,4 @@
-# naivegis
+# Naïve GIS
 Such a simple and naive GIS platform.
 
 Fuck those slow, complicated, expensive and "user-friendly" GIS software. I just want to show some points on the map.
