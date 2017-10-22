@@ -34,6 +34,9 @@ section {
     box-sizing: border-box;
     transition: all .1s;
 }
+p {
+    margin: .5em 0;
+}
 #container {
     height: 100%;
     width: auto;
@@ -74,16 +77,16 @@ section {
 .sdst {
     color: #FF4136;
 }
-#turnbyturn {
+#history {
     border-spacing: 0;
     border-collapse: separate;
     width: 100%;
     font-size: .9em;
 }
-.turn {
+.hrow {
     cursor: pointer;
 }
-.turn:hover {
+.hrow:hover {
     background: #FFFFE6;
 }
 .diricon {
@@ -148,6 +151,9 @@ input:focus, select:focus {
 #qcolor {
     width: 5em;
 }
+#qgroupby {
+    width: 10em;
+}
 #error {
     color: #FF851B;
     font-weight: bold;
@@ -188,7 +194,7 @@ function SubmitForm(oFormElement, callback) {
     var formdata = new FormData(oFormElement);
     xhr.send(formdata);
     window.location.hash = '#' + encodeURIComponent(formdata.get('q'));
-    return false;
+    return formdata;
 }
 function SVGMarkerIcon(fill) {
     var url = 'data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 52" height="52px" width="32px"><path d="M15.998047 1C7.7145969 1 1 7.6567495 1 15.865234 1 24.076446 16 51 16 51 16 51 31 24.076446 31 15.865234 31 7.6567495 24.281497 1 15.998047 1zM16 10.5A5.5 5.5 0 0 1 21.5 16 5.5 5.5 0 0 1 16 21.5 5.5 5.5 0 0 1 10.5 16 5.5 5.5 0 0 1 16 10.5z" fill="'+fill+'"/></svg>';
@@ -209,8 +215,9 @@ function GetMarkerIcon(fill) {
     return icon;
 }
 function FetchElements(form) {
-    SubmitForm(form, function(response, status) {
+    var formdata = SubmitForm(form, function(response, status) {
         if (status === 200) {
+            document.getElementById('info').innerHTML = '<p>Enter SQL Query</p>';
             RenderElements(response['elements']);
         } else if (status === 404 || status === 403) {
             document.getElementById('info').innerHTML = '<p id="error">Server Error</p>';
@@ -229,6 +236,15 @@ function ResetElements() {
     var i = canvases.length;
     while (i --> 0) {
         overlay.removeChild(canvases[i]);
+    }
+}
+function ChangeGroupbyBox() {
+    var e = document.getElementById('etype');
+    var val = e.options[e.selectedIndex].value;
+    if (val === 'polyline' || val === 'polygon') {
+        document.getElementById('qgroupby').disabled = false;
+    } else {
+        document.getElementById('qgroupby').disabled = true;
     }
 }
 function RenderElements(elements) {
@@ -333,18 +349,20 @@ document.addEventListener('DOMContentLoaded', function() {
 <body>
 <div id="container">
 <section id="agent" class="smooth">
-    <div id="info">Enter SQL Query</div>
+    <div id="info"><p>Enter SQL Query</p></div>
     <form id="querybox" action="./query/" method="post" onsubmit="return FetchElements(this);">
         <textarea name="q" id="sqlinput"></textarea>
         <p>
         <input name="color" id="qcolor" placeholder="Color">
-        <select name="type">
+        <select name="type" id="etype" onchange="ChangeGroupbyBox();">
           <option value="marker" selected>Marker</option> 
           <option value="point">Point</option> 
           <option value="polyline">Polyline</option>
           <option value="polygon">Polygon</option>
           <option value="heatmap">Heatmap</option>
         </select>
+        </p><p>
+        <input name="groupby" id="qgroupby" placeholder="Group by" disabled>
         </p><p>Coords:
         <select name="fix">
           <option value="wgs" selected>WGS-84</option> 

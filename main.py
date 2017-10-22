@@ -117,6 +117,7 @@ def query_api():
     q = bottle.request.forms.get('q')
     color = bottle.request.forms.get('color')
     etype = bottle.request.forms.get('type', 'marker')
+    groupby = bottle.request.forms.get('groupby')
     fix = bottle.request.forms.get('fix', 'wgs')
     if not q:
         bottle.response.status = 400
@@ -148,7 +149,7 @@ def query_api():
                 d['pos'] = (lat, lon)
                 markers.append(d)
             else:
-                pid = d.get('id', 0)
+                pid = d.get(groupby, 0)
                 lines[pid] = d
                 if pid not in points:
                     points[pid] = []
@@ -156,6 +157,7 @@ def query_api():
             if etype != 'heatmap' and i > app.config['maxrow']:
                 error = 'only showing the first %d rows' % app.config['maxrow']
                 break
+        cur.close()
         if etype in ('marker', 'point'):
             return {'elements': markers, 'error': error}
         else:
