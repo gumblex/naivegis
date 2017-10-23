@@ -218,7 +218,7 @@ def main():
     elif args.type == 'pg':
         app.config['dbconn'] = PostgreSQLConnection(' '.join(args.connection), **kwargs)
     elif args.type == 'mssql':
-        app.config['dbconn'] = MSSQLConnection(args.connection, **kwargs)
+        app.config['dbconn'] = MSSQLConnection(*args.connection, **kwargs)
     elif args.type == 'csv':
         app.config['dbconn'] = CSVConnection(args.connection[0], **kwargs)
     app.config['maxrow'] = args.maxrow

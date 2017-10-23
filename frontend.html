@@ -282,7 +282,7 @@ function RenderElements(elements) {
         } else if (e.type === 'polyline' || e.type === 'polygon') {
             element = L[e.type](e.points, {
                     color: e.color || '#03F',
-                    weight: e.weight === undefined ? 6 : e.weight,
+                    weight: e.weight === undefined ? 3 : e.weight,
                     opacity: e.opacity === undefined ? 1.0 : e.opacity
                 }).addTo(map);
             latlngs = latlngs.concat(e.points);
