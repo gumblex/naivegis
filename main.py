@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import re
 import math
 import sqlite3
 import argparse
@@ -20,7 +21,8 @@ haversine = lambda lat1, lng1, lat2, lng2: 2 * R_EARTH * math.asin(
     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
     math.sin(math.radians(lng2 - lng1) / 2) ** 2))
 
-def from3857_to4326(x, y):
+def from3857_to4326(point):
+    x, y = point
     lon = math.degrees(x / EARTH_EQUATORIAL_RADIUS)
     lat = math.degrees(2 * math.atan(math.exp(y/EARTH_EQUATORIAL_RADIUS)) - math.pi/2)
     return (lat, lon)
@@ -32,6 +34,9 @@ def sql_auth(sqltype, arg1, arg2, dbname, source):
         return sqlite3.SQLITE_OK
     else:
         return sqlite3.SQLITE_DENY
+
+class Point(prcoords.Coords):
+    pass
 
 class DatabaseConnection:
     def __init__(self, database, readonly=True, **kwargs):
@@ -56,10 +61,25 @@ class SQLite3Connection(DatabaseConnection):
 
 class PostgreSQLConnection(DatabaseConnection):
     def __init__(self, database, readonly=True, **kwargs):
-        import psycopg2, psycopg2.extras
+        import psycopg2, psycopg2.extras, psycopg2.extensions
+        POINT = psycopg2.extensions.new_type(
+                (600,), "POINT", PostgreSQLConnection.cast_point)
+        psycopg2.extensions.register_type(POINT)
         self.conn = psycopg2.connect(database, cursor_factory=psycopg2.extras.DictCursor, **kwargs)
         if readonly:
             self.conn.set_session(readonly=True)
+
+    @staticmethod
+    def cast_point(value, cur):
+        if value is None:
+            return None
+
+        # Convert from (f1, f2) syntax using a regular expression.
+        m = re.match(r"\(([^)]+),([^)]+)\)", value)
+        if m:
+            return Point(float(m.group(1)), float(m.group(2)))
+        else:
+            raise psycopg2.InterfaceError("bad point representation: %r" % value)
 
 class MSSQLConnection(DatabaseConnection):
     def __init__(self, server, user='', password='', database='', readonly=False, **kwargs):
@@ -130,18 +150,20 @@ def query_api():
         error = None
         for i, row in enumerate(cur):
             d = dict(row)
-            if fix == '3857':
-                x = d.pop('x')
-                y = d.pop('y')
-            else:
-                lat = d.pop('lat')
-                lon = d.pop('lon')
-            if fix == 'bd':
-                lat, lon = prcoords.bd_wgs((lat, lon))
-            elif fix == 'gcj':
-                lat, lon = prcoords.gcj_wgs((lat, lon))
+            if 'coords' in d:
+                point = d.pop('coords')
             elif fix == '3857':
-                lat, lon = from3857_to4326(x, y)
+                point = (d.pop('x'), d.pop('y'))
+            else:
+                point = (d.pop('lat'), d.pop('lon'))
+            if fix == 'bd':
+                lat, lon = prcoords.bd_wgs(point)
+            elif fix == 'gcj':
+                lat, lon = prcoords.gcj_wgs(point)
+            elif fix == '3857':
+                lat, lon = from3857_to4326(point)
+            else:
+                lat, lon = point
             d['type'] = etype
             if 'color' not in d:
                 d['color'] = color
