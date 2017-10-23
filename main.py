@@ -169,7 +169,7 @@ def query_api():
             return {'elements': elements, 'error': error}
     except Exception as ex:
         bottle.response.status = 500
-        return {'error': repr(ex)}
+        return {'error': str(ex)}
 
 
 @bottle.route('/')
