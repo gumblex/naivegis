@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import re
 import math
 import sqlite3
@@ -196,7 +197,8 @@ def query_api():
 
 @bottle.route('/')
 def index():
-    return bottle.static_file('frontend.html', root='.')
+    return bottle.static_file('frontend.html', root=os.path.normpath(
+        os.path.join(os.getcwd(), os.path.dirname(__file__))))
 
 def main():
     parser = argparse.ArgumentParser(
