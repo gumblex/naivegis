@@ -215,6 +215,7 @@ function GetMarkerIcon(fill) {
     return icon;
 }
 function FetchElements(form) {
+    document.getElementById('info').innerHTML = '<p>Querying...</p>';
     var formdata = SubmitForm(form, function(response, status) {
         if (status === 200) {
             document.getElementById('info').innerHTML = '<p>Enter SQL Query</p>';
@@ -291,8 +292,11 @@ function RenderElements(elements) {
             element = L.heatLayer(e.points, {
                 radius: e.radius || 10,
                 blur: e.blur || 15,
-                minOpacity: e.minOpacity || 0.05
+                minOpacity: e.minOpacity || 0.05,
+                max: e.max || 1.0
             }).addTo(map);
+            latlngs = latlngs.concat(e.points);
+            map_elements.push(element);
         }
     }
     i = latlngs.length;

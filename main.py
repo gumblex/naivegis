@@ -52,8 +52,13 @@ class DatabaseConnection:
         return cur
 
 class SQLite3Connection(DatabaseConnection):
-    def __init__(self, database, readonly=True, cache_size='-100000', **kwargs):
+    def __init__(self, database, readonly=True, cache_size='-100000', spatialite=None, **kwargs):
         self.conn = sqlite3.connect(database, **kwargs)
+        if spatialite:
+            self.conn.enable_load_extension(True)
+            self.conn.execute("SELECT load_extension(?)", (spatialite,))
+            self.conn.execute("SELECT InitSpatialMetaData()")
+            self.conn.enable_load_extension(False)
         self.conn.create_function("geodistance", 4, haversine)
         self.conn.execute('PRAGMA cache_size=%d' % int(cache_size))
         self.conn.row_factory = sqlite3.Row
@@ -97,7 +102,7 @@ class MSSQLConnection(DatabaseConnection):
         return cur
 
 class CSVConnection(DatabaseConnection):
-    def __init__(self, database, readonly=True, header=True, **kwargs):
+    def __init__(self, database, readonly=True, header=True, spatialite=None, **kwargs):
         import csv
         class CustumDialect(csv.Dialect):
             pass
@@ -111,6 +116,11 @@ class CSVConnection(DatabaseConnection):
         dialect.skipinitialspace = kwargs.get('skipinitialspace', False)
         dialect.strict = kwargs.get('strict', False)
         self.conn = sqlite3.connect(':memory:')
+        if spatialite:
+            self.conn.enable_load_extension(True)
+            self.conn.execute("SELECT load_extension(?)", (spatialite,))
+            self.conn.execute("SELECT InitSpatialMetaData()")
+            self.conn.enable_load_extension(False)
         self.conn.create_function("geodistance", 4, haversine)
         self.conn.row_factory = sqlite3.Row
         with open(database, newline='') as f:
@@ -146,9 +156,10 @@ def query_api():
     try:
         markers = []
         points = {}
-        lines = {}
+        groups = {}
         cur = app.config['dbconn'].execute(q)
         error = None
+        maxz = 0
         for i, row in enumerate(cur):
             d = dict(row)
             if 'coords' in d:
@@ -171,9 +182,19 @@ def query_api():
             if etype in ('marker', 'point'):
                 d['pos'] = (lat, lon)
                 markers.append(d)
+            elif etype == 'heatmap':
+                if 'z' in d:
+                    z = d.pop('z')
+                    maxz = max(maxz, z)
+                else:
+                    z = 1
+                if not points:
+                    points[0] = []
+                    groups[0] = d
+                points[0].append((lat, lon, z))
             else:
                 pid = d.get(groupby, 0)
-                lines[pid] = d
+                groups[pid] = d
                 if pid not in points:
                     points[pid] = []
                 points[pid].append((lat, lon))
@@ -183,16 +204,21 @@ def query_api():
         cur.close()
         if etype in ('marker', 'point'):
             return {'elements': markers, 'error': error}
+        elif etype == 'heatmap':
+            d = groups[0]
+            d['points'] = points[0]
+            d['max'] = d.get('maxz') or maxz or 1
+            return {'elements': [d], 'error': error}
         else:
             elements = []
             for pid, pos in points.items():
-                d = lines[pid]
+                d = groups[pid]
                 d['points'] = pos
                 elements.append(d)
             return {'elements': elements, 'error': error}
     except Exception as ex:
         bottle.response.status = 500
-        return {'error': str(ex)}
+        return {'error': '%s: %s' % (type(ex).__name__, str(ex))}
 
 
 @bottle.route('/')
