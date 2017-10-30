@@ -1,7 +1,9 @@
 # Naïve GIS
 Such a simple and naive GIS platform.
 
-Fuck those slow, complicated, expensive and "user-friendly" GIS software. I just want to show some points on the map.
+Fuck those slow, complicated and "user-friendly" GIS software. I just want to show some points on the map.
+
+This program doesn't support WKT/WKB and other formats (now).
 
 ## Usage
 
