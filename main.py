@@ -57,7 +57,6 @@ class SQLite3Connection(DatabaseConnection):
         if spatialite:
             self.conn.enable_load_extension(True)
             self.conn.execute("SELECT load_extension(?)", (spatialite,))
-            self.conn.execute("SELECT InitSpatialMetaData()")
             self.conn.enable_load_extension(False)
         self.conn.create_function("geodistance", 4, haversine)
         self.conn.execute('PRAGMA cache_size=%d' % int(cache_size))
