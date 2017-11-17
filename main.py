@@ -22,6 +22,8 @@ haversine = lambda lat1, lng1, lat2, lng2: 2 * R_EARTH * math.asin(
     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
     math.sin(math.radians(lng2 - lng1) / 2) ** 2))
 
+re_float = re.compile(r'^(-?[0-9]*\.?[0-9]+(e[-+]?[0-9]+)?|nan|[+-]?inf)$', re.I)
+
 def from3857_to4326(point):
     x, y = point
     lon = math.degrees(x / EARTH_EQUATORIAL_RADIUS)
@@ -111,7 +113,7 @@ class CSVConnection(DatabaseConnection):
         dialect.escapechar = kwargs.get('escapechar', None)
         dialect.lineterminator = kwargs.get('lineterminator', '\r\n')
         dialect.quotechar = kwargs.get('quotechar', '"')
-        dialect.quoting = getattr(csv, kwargs.get('quoting', 'QUOTE_NONNUMERIC'))
+        dialect.quoting = getattr(csv, kwargs.get('quoting', 'QUOTE_MINIMAL'))
         dialect.skipinitialspace = kwargs.get('skipinitialspace', False)
         dialect.strict = kwargs.get('strict', False)
         self.conn = sqlite3.connect(':memory:')
@@ -122,6 +124,7 @@ class CSVConnection(DatabaseConnection):
             self.conn.enable_load_extension(False)
         self.conn.create_function("geodistance", 4, haversine)
         self.conn.row_factory = sqlite3.Row
+        try_float = lambda x: float(x) if re_float.match(x) else x
         with open(database, newline='') as f:
             reader = csv.reader(f, dialect)
             first_row = next(reader)
@@ -134,10 +137,12 @@ class CSVConnection(DatabaseConnection):
             self.conn.execute('CREATE TABLE csv(%s)' % (','.join(col_name)))
             if first_row:
                 self.conn.execute(
-                    'INSERT INTO csv VALUES (%s)' % values, tuple(first_row))
+                    'INSERT INTO csv VALUES (%s)' % values,
+                    tuple(map(try_float, first_row)))
             for row in reader:
                 self.conn.execute(
-                    'INSERT INTO csv VALUES (%s)' % values, tuple(row))
+                    'INSERT INTO csv VALUES (%s)' % values,
+                    tuple(map(try_float, row)))
             self.conn.commit()
         if readonly:
             self.conn.set_authorizer(sql_auth)
@@ -262,6 +267,8 @@ def main():
                     pass
             kwargs[k] = v
     kwargs['readonly'] = not args.writeable
+    if args.type == 'csv':
+        print('Loading...')
     if args.type == 'sqlite3':
         app.config['dbconn'] = SQLite3Connection(args.connection[0], **kwargs)
     elif args.type == 'pg':
