@@ -75,6 +75,7 @@ class PostgreSQLConnection(DatabaseConnection):
         self.conn = psycopg2.connect(database, cursor_factory=psycopg2.extras.DictCursor, **kwargs)
         if readonly:
             self.conn.set_session(readonly=True)
+        self.conn.set_session(autocommit=True)
 
     @staticmethod
     def cast_point(value, cur):
